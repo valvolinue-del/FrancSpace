@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  windows:
+    name: Windows MSVC x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -A x64 -DFRANCSPACE_BUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $root = "package"
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          Copy-Item -Recurse "build/FrancSpace_artefacts/Release/VST3/FrancSpace.vst3" $root
+          Copy-Item "build/FrancSpace_artefacts/Release/Standalone/FrancSpace.exe" $root
+          Compress-Archive -Path "$root/*" -DestinationPath "FrancSpace-windows-x64.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FrancSpace-windows-x64
+          path: FrancSpace-windows-x64.zip
+
+  macos:
+    name: macOS universal
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DFRANCSPACE_BUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Sign and notarize when all secrets are present
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          secrets=(
+            APPLE_CERTIFICATE_P12_BASE64
+            APPLE_CERTIFICATE_PASSWORD
+            APPLE_SIGNING_IDENTITY
+            APPLE_ID
+            APPLE_APP_SPECIFIC_PASSWORD
+            APPLE_TEAM_ID
+          )
+          present=0
+          for name in "${secrets[@]}"; do
+            if [[ -n "${!name}" ]]; then
+              present=$((present + 1))
+            fi
+          done
+
+          if [[ "$present" -eq 0 ]]; then
+            echo "Signing secrets absent. Uploading an unsigned build."
+            exit 0
+          fi
+          if [[ "$present" -ne 6 ]]; then
+            echo "Developer ID signing is all-or-none. Found ${present} of 6 secrets." >&2
+            exit 1
+          fi
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/franc.signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          echo "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+
+          sign_bundle() {
+            local bundle="$1"
+            codesign --force --deep --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$bundle"
+            codesign --verify --deep --strict --verbose=2 "$bundle"
+            ditto -c -k --keepParent "$bundle" "$RUNNER_TEMP/$(basename "$bundle").zip"
+            xcrun notarytool submit "$RUNNER_TEMP/$(basename "$bundle").zip" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --wait
+            xcrun stapler staple "$bundle"
+          }
+
+          sign_bundle "build/FrancSpace_artefacts/Release/VST3/FrancSpace.vst3"
+          sign_bundle "build/FrancSpace_artefacts/Release/Standalone/FrancSpace.app"
+          security delete-keychain "$KEYCHAIN_PATH" || true
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          mkdir -p package
+          cp -R "build/FrancSpace_artefacts/Release/VST3/FrancSpace.vst3" package/
+          cp -R "build/FrancSpace_artefacts/Release/Standalone/FrancSpace.app" package/
+          ditto -c -k --norsrc package FrancSpace-macos-universal.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FrancSpace-macos-universal
+          path: FrancSpace-macos-universal.zip
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/FrancSpace-windows-x64/FrancSpace-windows-x64.zip
+            artifacts/FrancSpace-macos-universal/FrancSpace-macos-universal.zip
