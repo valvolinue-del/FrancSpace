@@ -526,7 +526,7 @@ int renderSnapshots (const char* widePath, const char* compactPath)
     if (compactPath != nullptr)
     {
         FrancSpaceAudioProcessor processor;
-        if (writeSnapshot (processor, compactPath, 980, 640) != 0)
+        if (writeSnapshot (processor, compactPath, 640, 400) != 0)
             return 2;
     }
 

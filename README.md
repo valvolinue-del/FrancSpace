@@ -137,7 +137,7 @@ cmake --build build --config Release --target FrancSpaceSanity
   --snapshot-compact /tmp/francspace-compact.png
 ```
 
-Pass `-DFRANCSPACE_BUILD_TESTS=OFF` to skip that target. The snapshot flags need a display (or Xvfb) because they open the editor offscreen. The wide shot is 1280×800 with the internal detector running; the compact shot is 980×640 with no sidechain.
+Pass `-DFRANCSPACE_BUILD_TESTS=OFF` to skip that target. The snapshot flags need a display (or Xvfb) because they open the editor offscreen. The wide shot is 1280×800 with the internal detector running; the compact shot is the minimum window, 640×400, with no sidechain. The editor resizes from 640×400 to 1800×1120.
 
 ## Continuous integration
 

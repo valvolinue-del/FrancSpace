@@ -58,7 +58,13 @@ void SpaceDisplay::pullTargets()
 
 juce::Rectangle<float> SpaceDisplay::plotArea() const
 {
-    return getLocalBounds().toFloat().reduced (18.0f, 14.0f).withTrimmedLeft (36.0f).withTrimmedBottom (22.0f).withTrimmedTop (18.0f);
+    const auto bounds = getLocalBounds().toFloat();
+    const float padX = juce::jlimit (8.0f, 18.0f, bounds.getWidth() * 0.02f);
+    const float padY = juce::jlimit (6.0f, 14.0f, bounds.getHeight() * 0.04f);
+    const float left = juce::jlimit (22.0f, 36.0f, bounds.getWidth() * 0.04f);
+    const float bottom = juce::jlimit (14.0f, 22.0f, bounds.getHeight() * 0.08f);
+    const float top = juce::jlimit (6.0f, 18.0f, bounds.getHeight() * 0.045f);
+    return bounds.reduced (padX, padY).withTrimmedLeft (left).withTrimmedBottom (bottom).withTrimmedTop (top);
 }
 
 float SpaceDisplay::frequencyToX (float frequency, juce::Rectangle<float> area) const

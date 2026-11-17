@@ -175,7 +175,8 @@ void FrancLookAndFeel::drawCornerResizer (juce::Graphics& g, int width, int heig
 juce::Label* FrancLookAndFeel::createSliderTextBox (juce::Slider& slider)
 {
     auto* label = juce::LookAndFeel_V4::createSliderTextBox (slider);
-    label->setFont (juce::Font (juce::FontOptions (12.5f)));
+    const float size = juce::jlimit (8.0f, 12.5f, static_cast<float> (slider.getTextBoxHeight()) - 1.0f);
+    label->setFont (juce::Font (juce::FontOptions (size)));
     label->setJustificationType (juce::Justification::centred);
     label->setColour (juce::Label::textColourId, franc::ivory);
     label->setColour (juce::Label::backgroundColourId, juce::Colours::transparentBlack);
@@ -188,9 +189,10 @@ juce::Font FrancLookAndFeel::getLabelFont (juce::Label&)
     return juce::Font (juce::FontOptions (12.5f));
 }
 
-juce::Font FrancLookAndFeel::getTextButtonFont (juce::TextButton&, int)
+juce::Font FrancLookAndFeel::getTextButtonFont (juce::TextButton&, int buttonHeight)
 {
-    return juce::Font (juce::FontOptions (12.0f).withKerningFactor (0.08f));
+    const float size = juce::jlimit (8.5f, 12.0f, static_cast<float> (buttonHeight) * 0.48f);
+    return juce::Font (juce::FontOptions (size).withKerningFactor (0.06f));
 }
 
 FrancSpaceAudioProcessorEditor::FrancSpaceAudioProcessorEditor (FrancSpaceAudioProcessor& processorIn)
@@ -309,7 +311,7 @@ FrancSpaceAudioProcessorEditor::FrancSpaceAudioProcessorEditor (FrancSpaceAudioP
     startTimerHz (30);
 
     setResizable (true, true);
-    setResizeLimits (980, 640, 1800, 1120);
+    setResizeLimits (640, 400, 1800, 1120);
     setSize (1200, 760);
 }
 
@@ -385,11 +387,13 @@ void FrancSpaceAudioProcessorEditor::paint (juce::Graphics& g)
     if (! titleBounds.isEmpty())
     {
         auto title = titleBounds.toFloat();
-        auto rule = title.removeFromTop (16.0f);
+        const float ruleHeight = title.getHeight() < 48.0f ? 8.0f : 16.0f;
+        auto rule = title.removeFromTop (ruleHeight);
         const float centreX = rule.getCentreX();
+        const float ruleGap = getWidth() < 760 ? 128.0f : 40.0f;
         g.setColour (franc::gold.withAlpha (0.75f));
-        g.drawLine (rule.getX() + 40.0f, rule.getCentreY(), centreX - 14.0f, rule.getCentreY(), 1.0f);
-        g.drawLine (centreX + 14.0f, rule.getCentreY(), rule.getRight() - 40.0f, rule.getCentreY(), 1.0f);
+        g.drawLine (rule.getX() + ruleGap, rule.getCentreY(), centreX - 14.0f, rule.getCentreY(), 1.0f);
+        g.drawLine (centreX + 14.0f, rule.getCentreY(), rule.getRight() - ruleGap, rule.getCentreY(), 1.0f);
 
         juce::Path diamond;
         const float y = rule.getCentreY();
@@ -401,23 +405,33 @@ void FrancSpaceAudioProcessorEditor::paint (juce::Graphics& g)
         g.setColour (franc::gold);
         g.fillPath (diamond);
 
-        const juce::Font titleFont (juce::FontOptions (34.0f, juce::Font::bold).withKerningFactor (0.045f));
-        drawTrackedText (g, "FrancSpace", title.removeFromTop (40.0f), titleFont, franc::gold, 1.4f);
+        const float titleSize = juce::jlimit (16.0f, 34.0f, titleBounds.getHeight() * 0.52f);
+        const juce::Font titleFont (juce::FontOptions (titleSize, juce::Font::bold).withKerningFactor (0.045f));
+        const float nameHeight = juce::jmin (title.getHeight(), titleSize + 8.0f);
+        drawTrackedText (g, "FrancSpace", title.removeFromTop (nameHeight), titleFont, franc::gold, titleSize > 24.0f ? 1.4f : 0.6f);
 
-        const juce::Font subtitleFont (juce::FontOptions (11.0f).withKerningFactor (0.18f));
-        drawTrackedText (g, "SPECTRAL SPACE", title, subtitleFont, franc::muted, 2.2f);
+        if (title.getHeight() >= 12.0f)
+        {
+            const float subtitleSize = juce::jlimit (8.0f, 11.0f, title.getHeight() * 0.7f);
+            const juce::Font subtitleFont (juce::FontOptions (subtitleSize).withKerningFactor (0.16f));
+            drawTrackedText (g, "SPECTRAL SPACE", title, subtitleFont, franc::muted, subtitleSize > 9.5f ? 2.2f : 1.2f);
+        }
 
         const int status = processor.getSidechainStatus();
         const bool live = status != FrancSpaceAudioProcessor::statusNone;
         const char* statusLabel = status == FrancSpaceAudioProcessor::statusInternal ? "INTERNAL"
                                 : status == FrancSpaceAudioProcessor::statusSidechain ? "SIDECHAIN"
                                                                                        : "NO SIDECHAIN";
-        auto badge = juce::Rectangle<float> (static_cast<float> (getWidth()) - 168.0f, 18.0f, 148.0f, 24.0f);
+        const float badgeW = getWidth() < 760 ? 118.0f : 148.0f;
+        const float badgeH = getHeight() < 520 ? 18.0f : 24.0f;
+        auto badge = juce::Rectangle<float> (static_cast<float> (getWidth()) - badgeW - 16.0f,
+                                              static_cast<float> (titleBounds.getY()) + 4.0f,
+                                              badgeW, badgeH);
         g.setColour (franc::panelRaised);
-        g.fillRoundedRectangle (badge, 12.0f);
+        g.fillRoundedRectangle (badge, badgeH * 0.5f);
         g.setColour (live ? franc::gold : franc::muted);
-        g.drawRoundedRectangle (badge, 12.0f, 1.4f);
-        g.setFont (juce::Font (juce::FontOptions (11.0f).withKerningFactor (0.12f)));
+        g.drawRoundedRectangle (badge, badgeH * 0.5f, 1.2f);
+        g.setFont (juce::Font (juce::FontOptions (badgeH < 20.0f ? 8.5f : 11.0f).withKerningFactor (0.08f)));
         g.drawText (statusLabel, badge, juce::Justification::centred, false);
     }
 
@@ -436,22 +450,43 @@ void FrancSpaceAudioProcessorEditor::resized()
     if (getWidth() <= 0 || getHeight() <= 0)
         return;
 
-    auto area = getLocalBounds().reduced (16, 12);
-    titleBounds = area.removeFromTop (juce::jlimit (58, 74, getHeight() / 11));
-    area.removeFromTop (6);
+    const bool compact = getWidth() < 860 || getHeight() < 560;
+    const int marginX = compact ? 8 : 16;
+    const int marginY = compact ? 6 : 12;
+    auto area = getLocalBounds().reduced (marginX, marginY);
+    titleBounds = area.removeFromTop (juce::jlimit (compact ? 34 : 58, 74, getHeight() / 11));
+    area.removeFromTop (compact ? 3 : 6);
 
-    const int controlHeight = juce::jlimit (188, 250, getHeight() / 4 + 24);
+    const int controlHeight = juce::jlimit (compact ? 118 : 188, 250, getHeight() / 4 + (compact ? 16 : 24));
     controlsBounds = area.removeFromBottom (controlHeight);
-    area.removeFromBottom (8);
+    area.removeFromBottom (compact ? 4 : 8);
     display.setBounds (area);
 
-    auto controls = controlsBounds.reduced (12, 10);
-    auto hero = controls.removeFromLeft (juce::jlimit (124, 176, controls.getWidth() / 7));
-    controls.removeFromLeft (6);
-    auto side = controls.removeFromRight (juce::jlimit (156, 196, getWidth() / 6));
-    controls.removeFromRight (6);
+    const int labelH = compact ? 12 : 16;
+    const float labelSize = compact ? 8.5f : 11.0f;
+    const int textBoxH = compact ? 13 : 18;
+    for (auto* label : { &amountLabel, &lowLabel, &highLabel, &attackLabel, &releaseLabel,
+                         &sidechainLabel, &outputLabel, &mixLabel, &modeLabel, &detectorLabel, &bypassLabel })
+        label->setFont (juce::Font (juce::FontOptions (labelSize).withKerningFactor (compact ? 0.06f : 0.12f)));
 
-    amountLabel.setBounds (hero.removeFromTop (16));
+    amountSlider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, compact ? 62 : 88, textBoxH);
+    for (auto* slider : { &lowSlider, &highSlider, &attackSlider, &releaseSlider, &sidechainSlider, &outputSlider, &mixSlider })
+        slider->setTextBoxStyle (juce::Slider::TextBoxBelow, false, compact ? 54 : 72, textBoxH);
+
+    const float valueSize = compact ? 8.5f : 12.5f;
+    for (auto* slider : { &amountSlider, &lowSlider, &highSlider, &attackSlider, &releaseSlider,
+                          &sidechainSlider, &outputSlider, &mixSlider })
+        for (auto* child : slider->getChildren())
+            if (auto* value = dynamic_cast<juce::Label*> (child))
+                value->setFont (juce::Font (juce::FontOptions (valueSize)));
+
+    auto controls = controlsBounds.reduced (compact ? 6 : 12, compact ? 4 : 10);
+    auto hero = controls.removeFromLeft (juce::jlimit (compact ? 64 : 124, 176, controls.getWidth() / (compact ? 8 : 7)));
+    controls.removeFromLeft (compact ? 2 : 6);
+    auto side = controls.removeFromRight (juce::jlimit (compact ? 108 : 156, 196, getWidth() / (compact ? 7 : 6)));
+    controls.removeFromRight (compact ? 2 : 6);
+
+    amountLabel.setBounds (hero.removeFromTop (labelH));
     amountSlider.setBounds (hero);
 
     juce::Slider* knobs[] = { &lowSlider, &highSlider, &attackSlider, &releaseSlider,
@@ -461,23 +496,25 @@ void FrancSpaceAudioProcessorEditor::resized()
     for (int index = 0; index < 7; ++index)
     {
         auto cell = controls.removeFromLeft (controls.getWidth() / (7 - index));
-        labels[index]->setBounds (cell.removeFromTop (16));
-        knobs[index]->setBounds (cell.reduced (2, 0));
+        labels[index]->setBounds (cell.removeFromTop (labelH));
+        knobs[index]->setBounds (cell.reduced (compact ? 0 : 2, 0));
     }
 
     auto column = side;
-    const int buttonHeight = juce::jlimit (24, 32, (column.getHeight() - 78) / 5);
-    modeLabel.setBounds (column.removeFromTop (15));
+    const int gap = compact ? 1 : 4;
+    const int chrome = labelH * 3 + gap * 3;
+    const int buttonHeight = juce::jlimit (14, 32, juce::jmax (14, (column.getHeight() - chrome) / 5));
+    modeLabel.setBounds (column.removeFromTop (labelH));
     for (auto& button : modeButtons)
-        button.setBounds (column.removeFromTop (buttonHeight).reduced (1, 2));
+        button.setBounds (column.removeFromTop (buttonHeight).reduced (1, compact ? 1 : 2));
 
-    column.removeFromTop (4);
-    detectorLabel.setBounds (column.removeFromTop (15));
+    column.removeFromTop (gap);
+    detectorLabel.setBounds (column.removeFromTop (labelH));
     auto detectorRow = column.removeFromTop (buttonHeight);
-    externalButton.setBounds (detectorRow.removeFromLeft (detectorRow.getWidth() / 2).reduced (1, 2));
-    internalButton.setBounds (detectorRow.reduced (1, 2));
+    externalButton.setBounds (detectorRow.removeFromLeft (detectorRow.getWidth() / 2).reduced (1, compact ? 1 : 2));
+    internalButton.setBounds (detectorRow.reduced (1, compact ? 1 : 2));
 
-    column.removeFromTop (4);
-    bypassLabel.setBounds (column.removeFromTop (14));
+    column.removeFromTop (gap);
+    bypassLabel.setBounds (column.removeFromTop (juce::jmin (labelH, column.getHeight())));
     bypassButton.setBounds (column);
 }
