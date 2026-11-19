@@ -109,6 +109,7 @@ jobs:
 
           sign_bundle "build/FrancSpace_artefacts/Release/VST3/FrancSpace.vst3"
           sign_bundle "build/FrancSpace_artefacts/Release/Standalone/FrancSpace.app"
+          sign_bundle "build/FrancSpace_artefacts/Release/AU/FrancSpace.component"
           security delete-keychain "$KEYCHAIN_PATH" || true
 
       - name: Package
@@ -116,6 +117,7 @@ jobs:
           set -euo pipefail
           mkdir -p package
           cp -R "build/FrancSpace_artefacts/Release/VST3/FrancSpace.vst3" package/
+          cp -R "build/FrancSpace_artefacts/Release/AU/FrancSpace.component" package/
           cp -R "build/FrancSpace_artefacts/Release/Standalone/FrancSpace.app" package/
           ditto -c -k --norsrc package FrancSpace-macos-universal.zip
 

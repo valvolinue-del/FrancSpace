@@ -44,6 +44,11 @@ set(FRANCSPACE_SOURCES
     Source/SpectralEngine.h
     Source/Palette.h)
 
+set(FRANCSPACE_FORMATS VST3 Standalone)
+if(APPLE)
+    list(APPEND FRANCSPACE_FORMATS AU)
+endif()
+
 juce_add_plugin(FrancSpace
     COMPANY_NAME "Franc Audio"
     BUNDLE_ID com.francaudio.francspace
@@ -55,7 +60,7 @@ juce_add_plugin(FrancSpace
     COPY_PLUGIN_AFTER_BUILD FALSE
     PLUGIN_MANUFACTURER_CODE Frnc
     PLUGIN_CODE FrSp
-    FORMATS VST3 Standalone
+    FORMATS ${FRANCSPACE_FORMATS}
     PRODUCT_NAME "FrancSpace"
     VST3_CATEGORIES "Fx" "Dynamics" "EQ" "Analyzer"
     ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/Resources/Icon.png"
